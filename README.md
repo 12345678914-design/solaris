@@ -7,6 +7,5 @@
 * usar comando ```make clean``` para limpiar build
 * usar comando ```make``` para crear la build
 * usar comando ```make run``` para correr el sistema en qemu
-* ```bash
-# Este bloque tendrá un botón de copiar automático en GitHub
-git clone [https://github.com/tu-usuario/tu-repositorio.git](https://github.com/tu-usuario/tu-repositorio.git)
+* ```text
+  make
