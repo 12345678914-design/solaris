@@ -10,9 +10,7 @@ typedef struct {
 
 static ramfs_file_t archivos[RAMFS_MAX_FILES];
 
-static size_t copiar(char *destino, const char *origen,
-                     size_t capacidad)
-{
+static size_t copiar(char *destino, const char *origen, size_t capacidad) {
     size_t i = 0;
 
     if (capacidad == 0)
@@ -27,22 +25,18 @@ static size_t copiar(char *destino, const char *origen,
     return i;
 }
 
-static int buscar(const char *nombre)
-{
+static int buscar(const char *nombre) {
     for (int i = 0; i < RAMFS_MAX_FILES; i++) {
         if (!archivos[i].usado)
             continue;
 
         size_t j = 0;
 
-        while (nombre[j] != '\0' &&
-               archivos[i].nombre[j] != '\0' &&
-               nombre[j] == archivos[i].nombre[j]) {
+        while (nombre[j] != '\0' && archivos[i].nombre[j] != '\0' && nombre[j] == archivos[i].nombre[j]) {
             j++;
         }
 
-        if (nombre[j] == '\0' &&
-            archivos[i].nombre[j] == '\0') {
+        if (nombre[j] == '\0' && archivos[i].nombre[j] == '\0') {
             return i;
         }
     }
@@ -50,8 +44,7 @@ static int buscar(const char *nombre)
     return -1;
 }
 
-void ramfs_init(void)
-{
+void ramfs_init(void) {
     for (int i = 0; i < RAMFS_MAX_FILES; i++) {
         archivos[i].usado = 0;
         archivos[i].longitud = 0;
@@ -60,8 +53,7 @@ void ramfs_init(void)
     }
 }
 
-int ramfs_create(const char *nombre)
-{
+int ramfs_create(const char *nombre) {
     if (nombre == NULL || nombre[0] == '\0')
         return 0;
 
@@ -78,8 +70,7 @@ int ramfs_create(const char *nombre)
 
     for (int i = 0; i < RAMFS_MAX_FILES; i++) {
         if (!archivos[i].usado) {
-            copiar(archivos[i].nombre, nombre,
-                   RAMFS_NAME_MAX);
+            copiar(archivos[i].nombre, nombre, RAMFS_NAME_MAX);
             archivos[i].datos[0] = '\0';
             archivos[i].longitud = 0;
             archivos[i].usado = 1;
@@ -90,8 +81,7 @@ int ramfs_create(const char *nombre)
     return 0;
 }
 
-int ramfs_write(const char *nombre, const char *datos)
-{
+int ramfs_write(const char *nombre, const char *datos) {
     if (nombre == NULL || datos == NULL)
         return 0;
 
@@ -114,8 +104,7 @@ int ramfs_write(const char *nombre, const char *datos)
     return 1;
 }
 
-int ramfs_read(const char *nombre, char *buffer, size_t capacidad)
-{
+int ramfs_read(const char *nombre, char *buffer, size_t capacidad) {
     if (nombre == NULL || buffer == NULL || capacidad == 0)
         return 0;
 
@@ -132,8 +121,7 @@ int ramfs_read(const char *nombre, char *buffer, size_t capacidad)
     return 1;
 }
 
-int ramfs_list(char *buffer, size_t capacidad)
-{
+int ramfs_list(char *buffer, size_t capacidad) {
     if (buffer == NULL || capacidad == 0)
         return 0;
 

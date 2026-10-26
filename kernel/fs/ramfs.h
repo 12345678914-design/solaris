@@ -5,8 +5,8 @@
 #include <stddef.h>
 
 #define RAMFS_MAX_FILES 32
-#define RAMFS_NAME_MAX  32
-#define RAMFS_DATA_MAX  256
+#define RAMFS_NAME_MAX 32
+#define RAMFS_DATA_MAX 256
 
 void ramfs_init(void);
 

@@ -11,15 +11,9 @@ static char cwd[VFS_PATH_MAX] = "/";
 static uint32_t cwd_inodo = 2;
 static int vfs_montado = 0;
 
-/* Buffer de trabajo estatico: evita arreglos grandes en la pila. */
 static ext4_dir_entry_t entradas_ext4[VFS_MAX_ENTRADAS];
 
-/* ------------------------------------------------------------------ */
-/* Utilidades de cadenas                                              */
-/* ------------------------------------------------------------------ */
-
-static int comparar_cadena(const char *a, const char *b)
-{
+static int comparar_cadena(const char *a, const char *b) {
     if (a == NULL || b == NULL)
         return 0;
 
@@ -32,8 +26,7 @@ static int comparar_cadena(const char *a, const char *b)
     return *a == '\0' && *b == '\0';
 }
 
-static void copiar_cadena(char *dest, const char *orig, size_t max)
-{
+static void copiar_cadena(char *dest, const char *orig, size_t max) {
     if (dest == NULL || orig == NULL || max == 0)
         return;
 
@@ -45,8 +38,7 @@ static void copiar_cadena(char *dest, const char *orig, size_t max)
     dest[i] = '\0';
 }
 
-static size_t longitud_cadena(const char *s)
-{
+static size_t longitud_cadena(const char *s) {
     size_t n = 0;
     if (s == NULL)
         return 0;
@@ -55,8 +47,7 @@ static size_t longitud_cadena(const char *s)
     return n;
 }
 
-static void ruta_subir_directorio(char *ruta)
-{
+static void ruta_subir_directorio(char *ruta) {
     size_t n = longitud_cadena(ruta);
 
     if (n <= 1) {
@@ -77,8 +68,7 @@ static void ruta_subir_directorio(char *ruta)
     }
 }
 
-static int ruta_agregar_componente(char *ruta, const char *componente, size_t capacidad)
-{
+static int ruta_agregar_componente(char *ruta, const char *componente, size_t capacidad) {
     size_t actual = longitud_cadena(ruta);
     size_t nombre = longitud_cadena(componente);
     int barra = (actual > 1 && ruta[actual - 1] != '/');
@@ -96,8 +86,7 @@ static int ruta_agregar_componente(char *ruta, const char *componente, size_t ca
     return 0;
 }
 
-static int nombre_simple_valido(const char *nombre)
-{
+static int nombre_simple_valido(const char *nombre) {
     size_t n = longitud_cadena(nombre);
 
     if (n == 0 || n > EXT4_NAME_MAX)
@@ -113,16 +102,7 @@ static int nombre_simple_valido(const char *nombre)
     return 1;
 }
 
-/* ------------------------------------------------------------------ */
-/* Resolucion de rutas                                                */
-/* ------------------------------------------------------------------ */
-
-/*
- * Resuelve una ruta de directorio componente a componente.
- * Admite rutas absolutas, relativas, ".", ".." y barras repetidas.
- */
-static int resolver_directorio(const char *ruta, uint32_t *resultado, char *ruta_resultado)
-{
+static int resolver_directorio(const char *ruta, uint32_t *resultado, char *ruta_resultado) {
     if (!vfs_montado || ruta == NULL || resultado == NULL)
         return -1;
 
@@ -184,13 +164,7 @@ static int resolver_directorio(const char *ruta, uint32_t *resultado, char *ruta
     return 0;
 }
 
-/*
- * Separa una ruta en directorio padre + nombre final.
- * "docs/nota.txt" -> padre "docs", nombre "nota.txt"
- * "/a/b"          -> padre "/a",  nombre "b"
- */
-static int resolver_padre(const char *ruta, uint32_t *padre, char *nombre)
-{
+static int resolver_padre(const char *ruta, uint32_t *padre, char *nombre) {
     if (!vfs_montado || ruta == NULL || padre == NULL || nombre == NULL)
         return -1;
 
@@ -232,8 +206,7 @@ static int resolver_padre(const char *ruta, uint32_t *padre, char *nombre)
     return 0;
 }
 
-static int es_ancestro(uint32_t posible_ancestro, uint32_t inodo)
-{
+static int es_ancestro(uint32_t posible_ancestro, uint32_t inodo) {
     if (posible_ancestro == inodo)
         return 1;
 
@@ -253,20 +226,14 @@ static int es_ancestro(uint32_t posible_ancestro, uint32_t inodo)
     return 0;
 }
 
-/* ------------------------------------------------------------------ */
-/* Inicializacion y montaje                                           */
-/* ------------------------------------------------------------------ */
-
-void vfs_init(void)
-{
+void vfs_init(void) {
     cwd[0] = '/';
     cwd[1] = '\0';
     cwd_inodo = 2;
     vfs_montado = 0;
 }
 
-int vfs_montar_ext4(void)
-{
+int vfs_montar_ext4(void) {
     vfs_montado = 0;
 
     int resultado = ext4_montar(ide_leer_bytes, 0);
@@ -282,17 +249,11 @@ int vfs_montar_ext4(void)
     return 0;
 }
 
-const char *vfs_get_cwd(void)
-{
+const char *vfs_get_cwd(void) {
     return cwd;
 }
 
-/* ------------------------------------------------------------------ */
-/* Navegacion                                                         */
-/* ------------------------------------------------------------------ */
-
-int vfs_cd(const char *ruta)
-{
+int vfs_cd(const char *ruta) {
     if (!vfs_montado || ruta == NULL || ruta[0] == '\0')
         return -1;
 
@@ -307,8 +268,7 @@ int vfs_cd(const char *ruta)
     return 0;
 }
 
-int vfs_ls(const char *ruta, vfs_entrada_t *entradas, int max)
-{
+int vfs_ls(const char *ruta, vfs_entrada_t *entradas, int max) {
     if (!vfs_montado || entradas == NULL || max <= 0)
         return -1;
 
@@ -330,12 +290,10 @@ int vfs_ls(const char *ruta, vfs_entrada_t *entradas, int max)
 
         if (entrada->name_len == 1 && entrada->nombre[0] == '.')
             continue;
-        if (entrada->name_len == 2 && entrada->nombre[0] == '.' &&
-            entrada->nombre[1] == '.')
+        if (entrada->name_len == 2 && entrada->nombre[0] == '.' && entrada->nombre[1] == '.')
             continue;
 
-        copiar_cadena(entradas[salida].nombre, entrada->nombre,
-                      sizeof(entradas[salida].nombre));
+        copiar_cadena(entradas[salida].nombre, entrada->nombre, sizeof(entradas[salida].nombre));
         entradas[salida].inodo = entrada->inodo;
 
         ext4_inodo_t inodo;
@@ -361,8 +319,7 @@ int vfs_ls(const char *ruta, vfs_entrada_t *entradas, int max)
     return salida;
 }
 
-int vfs_cat(const char *ruta, char *buffer, size_t capacidad)
-{
+int vfs_cat(const char *ruta, char *buffer, size_t capacidad) {
     if (!vfs_montado || ruta == NULL || buffer == NULL || capacidad == 0)
         return -1;
     if (capacidad > 0xFFFFFFFFu)
@@ -381,19 +338,13 @@ int vfs_cat(const char *ruta, char *buffer, size_t capacidad)
         return -3;
 
     uint32_t leido = 0;
-    int resultado = ext4_leer_archivo(entrada.inodo, buffer,
-                                      (uint32_t)capacidad, &leido);
+    int resultado = ext4_leer_archivo(entrada.inodo, buffer, (uint32_t)capacidad, &leido);
     if (resultado != 0)
         return resultado;
     return (int)leido;
 }
 
-/* ------------------------------------------------------------------ */
-/* Creacion, escritura y borrado                                      */
-/* ------------------------------------------------------------------ */
-
-int vfs_mkdir(const char *ruta)
-{
+int vfs_mkdir(const char *ruta) {
     if (!vfs_montado || ruta == NULL || ruta[0] == '\0')
         return -1;
 
@@ -405,8 +356,7 @@ int vfs_mkdir(const char *ruta)
     return ext4_crear(padre, nombre, 1, NULL);
 }
 
-int vfs_touch(const char *ruta)
-{
+int vfs_touch(const char *ruta) {
     if (!vfs_montado || ruta == NULL || ruta[0] == '\0')
         return -1;
 
@@ -422,13 +372,11 @@ int vfs_touch(const char *ruta)
     return ext4_crear(padre, nombre, 0, NULL);
 }
 
-int vfs_crear_archivo(const char *ruta)
-{
+int vfs_crear_archivo(const char *ruta) {
     return vfs_touch(ruta);
 }
 
-int vfs_write(const char *ruta, const char *datos)
-{
+int vfs_write(const char *ruta, const char *datos) {
     if (!vfs_montado || ruta == NULL || datos == NULL)
         return -1;
 
@@ -457,8 +405,7 @@ int vfs_write(const char *ruta, const char *datos)
     return ext4_escribir_archivo(inodo, datos, (uint32_t)longitud);
 }
 
-int vfs_rm(const char *ruta)
-{
+int vfs_rm(const char *ruta) {
     if (!vfs_montado || ruta == NULL || ruta[0] == '\0')
         return -1;
 
@@ -476,8 +423,7 @@ int vfs_rm(const char *ruta)
     return ext4_eliminar(padre, nombre);
 }
 
-int vfs_rmdir(const char *ruta)
-{
+int vfs_rmdir(const char *ruta) {
     if (!vfs_montado || ruta == NULL || ruta[0] == '\0')
         return -1;
 
@@ -497,8 +443,7 @@ int vfs_rmdir(const char *ruta)
     return ext4_eliminar(padre, nombre);
 }
 
-int vfs_rrm(const char *ruta)
-{
+int vfs_rrm(const char *ruta) {
     if (!vfs_montado || ruta == NULL || ruta[0] == '\0')
         return -1;
 

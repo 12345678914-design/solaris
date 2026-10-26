@@ -1,29 +1,28 @@
 #include "ide.h"
 #include "../io.h"
 
-#define IDE_DATA       0x1F0
-#define IDE_ERROR      0x1F1
-#define IDE_SECCOUNT   0x1F2
-#define IDE_LBA0       0x1F3
-#define IDE_LBA1       0x1F4
-#define IDE_LBA2       0x1F5
-#define IDE_DRIVE      0x1F6
-#define IDE_STATUS     0x1F7
-#define IDE_COMMAND    0x1F7
+#define IDE_DATA 0x1F0
+#define IDE_ERROR 0x1F1
+#define IDE_SECCOUNT 0x1F2
+#define IDE_LBA0 0x1F3
+#define IDE_LBA1 0x1F4
+#define IDE_LBA2 0x1F5
+#define IDE_DRIVE 0x1F6
+#define IDE_STATUS 0x1F7
+#define IDE_COMMAND 0x1F7
 
-#define ATA_BSY        0x80
-#define ATA_DRDY       0x40
-#define ATA_DRQ        0x08
-#define ATA_ERR        0x01
-#define ATA_READ_EXT   0x24
-#define ATA_WRITE_EXT  0x34
-#define ATA_FLUSH_EXT  0xEA
+#define ATA_BSY 0x80
+#define ATA_DRDY 0x40
+#define ATA_DRQ 0x08
+#define ATA_ERR 0x01
+#define ATA_READ_EXT 0x24
+#define ATA_WRITE_EXT 0x34
+#define ATA_FLUSH_EXT 0xEA
 
-#define SECTOR_SIZE    512
-#define MAX_SECTORES   255
+#define SECTOR_SIZE 512
+#define MAX_SECTORES 255
 
-static int ide_esperar_drq(void)
-{
+static int ide_esperar_drq(void) {
     inb(IDE_STATUS);
     inb(IDE_STATUS);
     inb(IDE_STATUS);
@@ -44,8 +43,7 @@ static int ide_esperar_drq(void)
     return -3;
 }
 
-static int ide_esperar_fin(void)
-{
+static int ide_esperar_fin(void) {
     for (uint32_t i = 0; i < 10000000u; i++) {
         uint8_t estado = inb(IDE_STATUS);
 
@@ -60,9 +58,8 @@ static int ide_esperar_fin(void)
     return -3;
 }
 
-static void ide_preparar_lba48(uint64_t lba, uint8_t sectores)
-{
-    outb(IDE_DRIVE, 0x40);      /* LBA48, unidad maestra */
+static void ide_preparar_lba48(uint64_t lba, uint8_t sectores) {
+    outb(IDE_DRIVE, 0x40);
     inb(IDE_STATUS);
     inb(IDE_STATUS);
     inb(IDE_STATUS);
@@ -79,18 +76,15 @@ static void ide_preparar_lba48(uint64_t lba, uint8_t sectores)
     outb(IDE_LBA2, (uint8_t)(lba >> 16));
 }
 
-static void ide_retardo(void)
-{
+static void ide_retardo(void) {
     for (int i = 0; i < 4; i++)
         inb(0x3F6);
 }
 
-static int ide_leer_sectores(uint64_t lba, uint8_t cantidad, uint8_t *buffer)
-{
+static int ide_leer_sectores(uint64_t lba, uint8_t cantidad, uint8_t *buffer) {
     if (cantidad == 0 || lba >= (1ULL << 48))
         return -1;
 
-    /* Una orden ATA por sector: evita depender del PIO multisector. */
     for (uint32_t s = 0; s < cantidad; s++) {
         if (lba + s >= (1ULL << 48))
             return -1;
@@ -115,8 +109,7 @@ static int ide_leer_sectores(uint64_t lba, uint8_t cantidad, uint8_t *buffer)
     return 0;
 }
 
-static int ide_escribir_sectores(uint64_t lba, uint8_t cantidad, const uint8_t *buffer)
-{
+static int ide_escribir_sectores(uint64_t lba, uint8_t cantidad, const uint8_t *buffer) {
     if (cantidad == 0 || lba >= (1ULL << 48))
         return -1;
 
@@ -132,8 +125,7 @@ static int ide_escribir_sectores(uint64_t lba, uint8_t cantidad, const uint8_t *
 
         const uint8_t *origen = buffer + (uint32_t)s * SECTOR_SIZE;
         for (uint32_t i = 0; i < 256; i++) {
-            uint16_t palabra = ((uint16_t)origen[i * 2 + 1] << 8) |
-                               (uint16_t)origen[i * 2];
+            uint16_t palabra = ((uint16_t)origen[i * 2 + 1] << 8) | (uint16_t)origen[i * 2];
             outw(IDE_DATA, palabra);
         }
 
@@ -144,14 +136,12 @@ static int ide_escribir_sectores(uint64_t lba, uint8_t cantidad, const uint8_t *
     return 0;
 }
 
-static int ide_volcar(void)
-{
+static int ide_volcar(void) {
     outb(IDE_COMMAND, ATA_FLUSH_EXT);
     return ide_esperar_fin();
 }
 
-int ide_leer_bytes(uint64_t offset, void *buffer, uint32_t size)
-{
+int ide_leer_bytes(uint64_t offset, void *buffer, uint32_t size) {
     if (buffer == 0 && size != 0)
         return -1;
 
@@ -193,8 +183,7 @@ int ide_leer_bytes(uint64_t offset, void *buffer, uint32_t size)
     return 0;
 }
 
-int ide_escribir_bytes(uint64_t offset, const void *buffer, uint32_t size)
-{
+int ide_escribir_bytes(uint64_t offset, const void *buffer, uint32_t size) {
     if (buffer == 0 && size != 0)
         return -1;
 
@@ -220,7 +209,6 @@ int ide_escribir_bytes(uint64_t offset, const void *buffer, uint32_t size)
             offset += bytes;
             size -= bytes;
         } else {
-            /* Lectura-modificacion-escritura para sectores parciales. */
             if (ide_leer_sectores(lba, 1, sector) != 0)
                 return -3;
 

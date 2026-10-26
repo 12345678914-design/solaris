@@ -5,8 +5,7 @@
 #include "fs/ext4.h"
 #include "fs/vfs.h"
 
-void kernel_main(void)
-{
+void kernel_main(void) {
     vfs_init();
 
     int resultado = vfs_montar_ext4();
@@ -37,6 +36,6 @@ void kernel_main(void)
     shell_ejecutar();
 
     while (1) {
-        __asm__ volatile ("hlt");
+        __asm__ volatile("hlt");
     }
 }

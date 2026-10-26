@@ -10,17 +10,9 @@
 
 #define EXT4_BLOCK_MAX 65536U
 
-typedef int (*ext4_read_bytes_fn)(
-    uint64_t offset,
-    void *buffer,
-    uint32_t size
-);
+typedef int (*ext4_read_bytes_fn)(uint64_t offset, void *buffer, uint32_t size);
 
-typedef int (*ext4_write_bytes_fn)(
-    uint64_t offset,
-    const void *buffer,
-    uint32_t size
-);
+typedef int (*ext4_write_bytes_fn)(uint64_t offset, const void *buffer, uint32_t size);
 
 typedef struct {
     uint32_t total_inodos;
@@ -35,7 +27,6 @@ typedef struct {
     uint16_t tamano_descriptor_grupo;
     uint64_t offset_tabla_descriptores;
 
-    /* Informacion adicional leida del superbloque. */
     uint64_t total_bloques;
     uint32_t total_grupos;
     uint32_t primer_inodo;
@@ -70,46 +61,23 @@ const ext4_info_t *ext4_obtener_info(void);
 
 int ext4_leer_inodo(uint32_t numero_inodo, ext4_inodo_t *inodo);
 
-int ext4_listar_directorio(
-    uint32_t numero_inodo,
-    ext4_dir_entry_t *entradas,
-    int max_entradas
-);
+int ext4_listar_directorio(uint32_t numero_inodo, ext4_dir_entry_t *entradas, int max_entradas);
 
-int ext4_leer_archivo(
-    uint32_t numero_inodo,
-    char *buffer,
-    uint32_t capacidad,
-    uint32_t *leido
-);
+int ext4_leer_archivo(uint32_t numero_inodo, char *buffer, uint32_t capacidad, uint32_t *leido);
 
-int ext4_buscar_en(
-    uint32_t directorio,
-    const char *nombre,
-    ext4_dir_entry_t *salida
-);
+int ext4_buscar_en(uint32_t directorio, const char *nombre, ext4_dir_entry_t *salida);
 
 int ext4_inodo_es_directorio(uint32_t numero_inodo);
 
-int ext4_crear(
-    uint32_t directorio,
-    const char *nombre,
-    int es_directorio,
-    uint32_t *nuevo_inodo
-);
+int ext4_crear(uint32_t directorio, const char *nombre, int es_directorio, uint32_t *nuevo_inodo);
 
-int ext4_escribir_archivo(
-    uint32_t numero_inodo,
-    const char *datos,
-    uint32_t longitud
-);
+int ext4_escribir_archivo(uint32_t numero_inodo, const char *datos, uint32_t longitud);
 
 int ext4_directorio_vacio(uint32_t numero_inodo);
 
 int ext4_eliminar(uint32_t directorio, const char *nombre);
 int ext4_eliminar_recursivo(uint32_t directorio, const char *nombre);
 
-/* Compatibilidad con la API anterior (operan sobre la raiz). */
 int ext4_crear_archivo(const char *nombre);
 int ext4_crear_directorio(const char *nombre);
 int ext4_eliminar_archivo(const char *nombre);

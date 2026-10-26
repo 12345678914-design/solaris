@@ -1,9 +1,5 @@
 #include "ext4.h"
 
-/* ------------------------------------------------------------------ */
-/* Constantes del formato ext4                                        */
-/* ------------------------------------------------------------------ */
-
 #define EXT4_SUPER_OFFSET 1024
 #define EXT4_SUPER_SIZE 1024
 #define EXT4_MAGIC 0xEF53
@@ -33,10 +29,6 @@
 #define EXT4_BG_INODE_UNINIT 0x0001
 #define EXT4_BG_BLOCK_UNINIT 0x0002
 
-/* ------------------------------------------------------------------ */
-/* Estado interno                                                     */
-/* ------------------------------------------------------------------ */
-
 static ext4_info_t informacion;
 static int ext4_disponible = 0;
 static int ext4_escritura = 0;
@@ -51,60 +43,45 @@ static uint8_t buffer_a[EXT4_BLOCK_MAX];
 static uint8_t buffer_b[EXT4_BLOCK_MAX];
 static uint8_t buffer_bitmap[EXT4_BLOCK_MAX];
 
-/* ------------------------------------------------------------------ */
-/* Utilidades de bytes                                                */
-/* ------------------------------------------------------------------ */
-
-static uint16_t leer_u16(const uint8_t *p)
-{
+static uint16_t leer_u16(const uint8_t *p) {
     return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
 }
 
-static uint32_t leer_u32(const uint8_t *p)
-{
-    return (uint32_t)p[0] |
-           ((uint32_t)p[1] << 8) |
-           ((uint32_t)p[2] << 16) |
-           ((uint32_t)p[3] << 24);
+static uint32_t leer_u32(const uint8_t *p) {
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
-static void escribir_u16(uint8_t *p, uint16_t v)
-{
+static void escribir_u16(uint8_t *p, uint16_t v) {
     p[0] = (uint8_t)(v & 0xFF);
     p[1] = (uint8_t)((v >> 8) & 0xFF);
 }
 
-static void escribir_u32(uint8_t *p, uint32_t v)
-{
+static void escribir_u32(uint8_t *p, uint32_t v) {
     p[0] = (uint8_t)(v & 0xFF);
     p[1] = (uint8_t)((v >> 8) & 0xFF);
     p[2] = (uint8_t)((v >> 16) & 0xFF);
     p[3] = (uint8_t)((v >> 24) & 0xFF);
 }
 
-static void escribir_u64(uint8_t *p, uint64_t v)
-{
+static void escribir_u64(uint8_t *p, uint64_t v) {
     escribir_u32(p, (uint32_t)(v & 0xFFFFFFFFu));
     escribir_u32(p + 4, (uint32_t)(v >> 32));
 }
 
-static void copiar_bytes(void *destino, const void *origen, uint32_t cantidad)
-{
+static void copiar_bytes(void *destino, const void *origen, uint32_t cantidad) {
     uint8_t *d = (uint8_t *)destino;
     const uint8_t *o = (const uint8_t *)origen;
     for (uint32_t i = 0; i < cantidad; i++)
         d[i] = o[i];
 }
 
-static void llenar_ceros(void *destino, uint32_t cantidad)
-{
+static void llenar_ceros(void *destino, uint32_t cantidad) {
     uint8_t *d = (uint8_t *)destino;
     for (uint32_t i = 0; i < cantidad; i++)
         d[i] = 0;
 }
 
-static uint32_t longitud_nombre(const char *s)
-{
+static uint32_t longitud_nombre(const char *s) {
     uint32_t n = 0;
     if (s == 0)
         return 0;
@@ -113,15 +90,10 @@ static uint32_t longitud_nombre(const char *s)
     return n;
 }
 
-/* ------------------------------------------------------------------ */
-/* CRC32C (variante usada por e2fsprogs/ext4: sin complemento)        */
-/* ------------------------------------------------------------------ */
-
 static uint32_t tabla_crc32c[256];
 static int tabla_crc_lista = 0;
 
-static void crc32c_iniciar_tabla(void)
-{
+static void crc32c_iniciar_tabla(void) {
     if (tabla_crc_lista)
         return;
     for (uint32_t i = 0; i < 256; i++) {
@@ -137,8 +109,7 @@ static void crc32c_iniciar_tabla(void)
     tabla_crc_lista = 1;
 }
 
-static uint32_t crc32c(uint32_t crc, const void *datos, uint32_t cantidad)
-{
+static uint32_t crc32c(uint32_t crc, const void *datos, uint32_t cantidad) {
     const uint8_t *p = (const uint8_t *)datos;
     crc32c_iniciar_tabla();
     while (cantidad--)
@@ -146,60 +117,40 @@ static uint32_t crc32c(uint32_t crc, const void *datos, uint32_t cantidad)
     return crc;
 }
 
-/* ------------------------------------------------------------------ */
-/* Acceso al disco                                                    */
-/* ------------------------------------------------------------------ */
-
-static int leer_absoluto(uint64_t offset, void *buffer, uint32_t size)
-{
+static int leer_absoluto(uint64_t offset, void *buffer, uint32_t size) {
     if (!ext4_leer_disco || !buffer)
         return -1;
     return ext4_leer_disco(ext4_inicio_particion + offset, buffer, size);
 }
 
-static int escribir_absoluto(uint64_t offset, const void *buffer, uint32_t size)
-{
+static int escribir_absoluto(uint64_t offset, const void *buffer, uint32_t size) {
     if (!ext4_escribir_disco || !ext4_escritura || !buffer)
         return -1;
     return ext4_escribir_disco(ext4_inicio_particion + offset, buffer, size);
 }
 
-static int leer_bloque(uint64_t bloque, void *buffer)
-{
-    return leer_absoluto(bloque * (uint64_t)informacion.tamano_bloque,
-                         buffer,
-                         informacion.tamano_bloque);
+static int leer_bloque(uint64_t bloque, void *buffer) {
+    return leer_absoluto(bloque * (uint64_t)informacion.tamano_bloque, buffer, informacion.tamano_bloque);
 }
 
-static int escribir_bloque(uint64_t bloque, const void *buffer)
-{
-    return escribir_absoluto(bloque * (uint64_t)informacion.tamano_bloque,
-                             buffer,
-                             informacion.tamano_bloque);
+static int escribir_bloque(uint64_t bloque, const void *buffer) {
+    return escribir_absoluto(bloque * (uint64_t)informacion.tamano_bloque, buffer, informacion.tamano_bloque);
 }
 
-/* ------------------------------------------------------------------ */
-/* Superbloque                                                        */
-/* ------------------------------------------------------------------ */
-
-static void superbloque_actualizar_checksum(void)
-{
+static void superbloque_actualizar_checksum(void) {
     if (!ext4_metadata_csum)
         return;
-    escribir_u32(&superbloque[0x3FC],
-                 crc32c(0xFFFFFFFFu, superbloque, 0x3FC));
+    escribir_u32(&superbloque[0x3FC], crc32c(0xFFFFFFFFu, superbloque, 0x3FC));
 }
 
-static int superbloque_guardar(void)
-{
+static int superbloque_guardar(void) {
     if (!ext4_escritura)
         return -1;
     superbloque_actualizar_checksum();
     return escribir_absoluto(EXT4_SUPER_OFFSET, superbloque, EXT4_SUPER_SIZE);
 }
 
-static void superbloque_sumar_bloques(int32_t delta)
-{
+static void superbloque_sumar_bloques(int32_t delta) {
     uint64_t libres = (uint64_t)leer_u32(&superbloque[0x0C]);
     if (informacion.caracteristicas_incompatibles & EXT4_FEATURE_INCOMPAT_64BIT)
         libres |= ((uint64_t)leer_u32(&superbloque[0x158]) << 32);
@@ -218,8 +169,7 @@ static void superbloque_sumar_bloques(int32_t delta)
     informacion.bloques_libres = (uint32_t)libres;
 }
 
-static void superbloque_sumar_inodos(int32_t delta)
-{
+static void superbloque_sumar_inodos(int32_t delta) {
     uint32_t libres = leer_u32(&superbloque[0x10]);
     if (delta < 0) {
         uint32_t resta = (uint32_t)(-delta);
@@ -231,28 +181,20 @@ static void superbloque_sumar_inodos(int32_t delta)
     informacion.inodos_libres = libres;
 }
 
-/* ------------------------------------------------------------------ */
-/* Descriptores de grupo                                              */
-/* ------------------------------------------------------------------ */
-
-static uint64_t desc_obtener_u64(const uint8_t *desc, uint32_t off_lo, uint32_t off_hi)
-{
+static uint64_t desc_obtener_u64(const uint8_t *desc, uint32_t off_lo, uint32_t off_hi) {
     uint64_t v = (uint64_t)leer_u32(desc + off_lo);
     if (informacion.tamano_descriptor_grupo >= 64)
         v |= ((uint64_t)leer_u32(desc + off_hi) << 32);
     return v;
 }
 
-static int desc_leer(uint32_t grupo, uint8_t *desc)
-{
-    uint64_t off = informacion.offset_tabla_descriptores +
-                   (uint64_t)grupo * (uint64_t)informacion.tamano_descriptor_grupo;
+static int desc_leer(uint32_t grupo, uint8_t *desc) {
+    uint64_t off = informacion.offset_tabla_descriptores + (uint64_t)grupo * (uint64_t)informacion.tamano_descriptor_grupo;
     llenar_ceros(desc, 64);
     return leer_absoluto(off, desc, informacion.tamano_descriptor_grupo);
 }
 
-static uint16_t desc_calcular_checksum(uint32_t grupo, const uint8_t *desc)
-{
+static uint16_t desc_calcular_checksum(uint32_t grupo, const uint8_t *desc) {
     uint8_t copia[64];
     uint32_t semilla = informacion.semilla_checksum;
     uint8_t numero[4];
@@ -266,19 +208,16 @@ static uint16_t desc_calcular_checksum(uint32_t grupo, const uint8_t *desc)
     return (uint16_t)(c & 0xFFFF);
 }
 
-static int desc_escribir(uint32_t grupo, uint8_t *desc)
-{
+static int desc_escribir(uint32_t grupo, uint8_t *desc) {
     if (!ext4_escritura)
         return -1;
     if (ext4_metadata_csum)
         escribir_u16(&desc[0x1E], desc_calcular_checksum(grupo, desc));
-    uint64_t off = informacion.offset_tabla_descriptores +
-                   (uint64_t)grupo * (uint64_t)informacion.tamano_descriptor_grupo;
+    uint64_t off = informacion.offset_tabla_descriptores + (uint64_t)grupo * (uint64_t)informacion.tamano_descriptor_grupo;
     return escribir_absoluto(off, desc, informacion.tamano_descriptor_grupo);
 }
 
-static void desc_actualizar_csum_bitmap_bloques(uint8_t *desc, const uint8_t *bitmap)
-{
+static void desc_actualizar_csum_bitmap_bloques(uint8_t *desc, const uint8_t *bitmap) {
     if (!ext4_metadata_csum)
         return;
     uint32_t c = crc32c(informacion.semilla_checksum, bitmap, informacion.tamano_bloque);
@@ -287,8 +226,7 @@ static void desc_actualizar_csum_bitmap_bloques(uint8_t *desc, const uint8_t *bi
         escribir_u16(&desc[0x38], (uint16_t)(c >> 16));
 }
 
-static void desc_actualizar_csum_bitmap_inodos(uint8_t *desc, const uint8_t *bitmap)
-{
+static void desc_actualizar_csum_bitmap_inodos(uint8_t *desc, const uint8_t *bitmap) {
     if (!ext4_metadata_csum)
         return;
     uint32_t bytes = informacion.inodos_por_grupo / 8;
@@ -298,8 +236,7 @@ static void desc_actualizar_csum_bitmap_inodos(uint8_t *desc, const uint8_t *bit
         escribir_u16(&desc[0x3A], (uint16_t)(c >> 16));
 }
 
-static void desc_sumar_libres(uint8_t *desc, int32_t delta_bloques, int32_t delta_inodos, int32_t delta_dirs)
-{
+static void desc_sumar_libres(uint8_t *desc, int32_t delta_bloques, int32_t delta_inodos, int32_t delta_dirs) {
     uint32_t v;
 
     v = leer_u16(&desc[0x0C]);
@@ -342,12 +279,7 @@ static void desc_sumar_libres(uint8_t *desc, int32_t delta_bloques, int32_t delt
         escribir_u16(&desc[0x30], (uint16_t)(v >> 16));
 }
 
-/* ------------------------------------------------------------------ */
-/* Inodos                                                             */
-/* ------------------------------------------------------------------ */
-
-static int inodo_ubicacion(uint32_t numero, uint32_t *grupo, uint32_t *indice)
-{
+static int inodo_ubicacion(uint32_t numero, uint32_t *grupo, uint32_t *indice) {
     if (numero == 0 || numero > informacion.total_inodos)
         return -1;
     uint32_t i = numero - 1;
@@ -356,8 +288,7 @@ static int inodo_ubicacion(uint32_t numero, uint32_t *grupo, uint32_t *indice)
     return 0;
 }
 
-static int inodo_leer_raw(uint32_t numero, uint8_t *raw)
-{
+static int inodo_leer_raw(uint32_t numero, uint8_t *raw) {
     uint32_t grupo, indice;
     uint8_t desc[64];
 
@@ -369,18 +300,16 @@ static int inodo_leer_raw(uint32_t numero, uint8_t *raw)
         return -3;
 
     uint64_t tabla = desc_obtener_u64(desc, 0x08, 0x28);
-    uint64_t off = tabla * (uint64_t)informacion.tamano_bloque +
-                   (uint64_t)indice * (uint64_t)informacion.tamano_inodo;
+    uint64_t off = tabla * (uint64_t)informacion.tamano_bloque + (uint64_t)indice * (uint64_t)informacion.tamano_inodo;
 
     llenar_ceros(raw, 256);
     return leer_absoluto(off, raw, informacion.tamano_inodo);
 }
 
-static uint32_t inodo_checksum(uint32_t numero, const uint8_t *raw)
-{
+static uint32_t inodo_checksum(uint32_t numero, const uint8_t *raw) {
     uint8_t copia[256];
     uint8_t numero_le[8];
-    uint8_t ceros[2] = { 0, 0 };
+    uint8_t ceros[2] = {0, 0};
     uint32_t total = informacion.tamano_inodo;
 
     copiar_bytes(copia, raw, total);
@@ -406,8 +335,7 @@ static uint32_t inodo_checksum(uint32_t numero, const uint8_t *raw)
     return c;
 }
 
-static void inodo_sellar(uint32_t numero, uint8_t *raw)
-{
+static void inodo_sellar(uint32_t numero, uint8_t *raw) {
     if (!ext4_metadata_csum)
         return;
     uint32_t c = inodo_checksum(numero, raw);
@@ -421,8 +349,7 @@ static void inodo_sellar(uint32_t numero, uint8_t *raw)
     }
 }
 
-static int inodo_escribir_raw(uint32_t numero, uint8_t *raw)
-{
+static int inodo_escribir_raw(uint32_t numero, uint8_t *raw) {
     uint32_t grupo, indice;
     uint8_t desc[64];
 
@@ -434,15 +361,13 @@ static int inodo_escribir_raw(uint32_t numero, uint8_t *raw)
         return -3;
 
     uint64_t tabla = desc_obtener_u64(desc, 0x08, 0x28);
-    uint64_t off = tabla * (uint64_t)informacion.tamano_bloque +
-                   (uint64_t)indice * (uint64_t)informacion.tamano_inodo;
+    uint64_t off = tabla * (uint64_t)informacion.tamano_bloque + (uint64_t)indice * (uint64_t)informacion.tamano_inodo;
 
     inodo_sellar(numero, raw);
     return escribir_absoluto(off, raw, informacion.tamano_inodo);
 }
 
-static uint64_t inodo_tamano(const uint8_t *raw)
-{
+static uint64_t inodo_tamano(const uint8_t *raw) {
     uint64_t bajo = (uint64_t)leer_u32(raw + 0x04);
     uint64_t alto = 0;
     if (informacion.tamano_inodo > EXT4_GOOD_OLD_INODE_SIZE)
@@ -450,8 +375,7 @@ static uint64_t inodo_tamano(const uint8_t *raw)
     return bajo | (alto << 32);
 }
 
-static void inodo_poner_tamano(uint8_t *raw, uint64_t tamano)
-{
+static void inodo_poner_tamano(uint8_t *raw, uint64_t tamano) {
     escribir_u32(raw + 0x04, (uint32_t)(tamano & 0xFFFFFFFFu));
     if (informacion.tamano_inodo > EXT4_GOOD_OLD_INODE_SIZE)
         escribir_u32(raw + 0x6C, (uint32_t)(tamano >> 32));
@@ -459,8 +383,7 @@ static void inodo_poner_tamano(uint8_t *raw, uint64_t tamano)
 
 static int inodo_mapa(const uint8_t *raw, uint32_t logico, uint32_t *fisico);
 
-static int mapa_extents(const uint8_t *iblock, uint32_t logico, uint32_t *fisico)
-{
+static int mapa_extents(const uint8_t *iblock, uint32_t logico, uint32_t *fisico) {
     const uint8_t *cabecera = iblock;
     int niveles = 0;
 
@@ -489,7 +412,7 @@ static int mapa_extents(const uint8_t *iblock, uint32_t logico, uint32_t *fisico
             }
         }
         if (!encontrado)
-            return 1; /* hueco */
+            return 1;
 
         if (leer_bloque(hoja, buffer_b) != 0)
             return -1;
@@ -522,11 +445,10 @@ static int mapa_extents(const uint8_t *iblock, uint32_t logico, uint32_t *fisico
             return (bruto > 32768) ? 1 : 0;
         }
     }
-    return 1; /* hueco */
+    return 1;
 }
 
-static int mapa_clasico(const uint8_t *raw, uint32_t logico, uint32_t *fisico)
-{
+static int mapa_clasico(const uint8_t *raw, uint32_t logico, uint32_t *fisico) {
     uint32_t por_bloque = informacion.tamano_bloque / 4;
     const uint8_t *ptr = raw + 0x28;
 
@@ -604,16 +526,14 @@ static int mapa_clasico(const uint8_t *raw, uint32_t logico, uint32_t *fisico)
     return 1;
 }
 
-static int inodo_mapa(const uint8_t *raw, uint32_t logico, uint32_t *fisico)
-{
+static int inodo_mapa(const uint8_t *raw, uint32_t logico, uint32_t *fisico) {
     uint32_t flags = leer_u32(raw + 0x20);
     if (flags & EXT4_EXTENTS_FL)
         return mapa_extents(raw + 0x28, logico, fisico);
     return mapa_clasico(raw, logico, fisico);
 }
 
-static void inodo_iniciar_extents(uint8_t *raw)
-{
+static void inodo_iniciar_extents(uint8_t *raw) {
     escribir_u16(raw + 0x28, EXT4_EXT_MAGIC);
     escribir_u16(raw + 0x2A, 0);
     escribir_u16(raw + 0x2C, EXT4_EXT_MAX_ENTRIES);
@@ -621,8 +541,7 @@ static void inodo_iniciar_extents(uint8_t *raw)
     escribir_u32(raw + 0x30, 0);
 }
 
-static int inodo_agregar_extento(uint8_t *raw, uint32_t logico, uint32_t fisico, uint32_t largo)
-{
+static int inodo_agregar_extento(uint8_t *raw, uint32_t logico, uint32_t fisico, uint32_t largo) {
     uint32_t flags = leer_u32(raw + 0x20);
     uint8_t *iblock = raw + 0x28;
 
@@ -650,10 +569,7 @@ static int inodo_agregar_extento(uint8_t *raw, uint32_t logico, uint32_t fisico,
         uint32_t inicio = leer_u32(ultima + 8);
         uint32_t alto = (uint32_t)leer_u16(ultima + 6);
 
-        if (alto == 0 &&
-            bloque_logico + largo_actual == logico &&
-            inicio + largo_actual == fisico &&
-            largo_actual + largo <= 32768) {
+        if (alto == 0 && bloque_logico + largo_actual == logico && inicio + largo_actual == fisico && largo_actual + largo <= 32768) {
             escribir_u16(ultima + 4, (uint16_t)(largo_actual + largo));
             return 0;
         }
@@ -671,12 +587,7 @@ static int inodo_agregar_extento(uint8_t *raw, uint32_t logico, uint32_t fisico,
     return 0;
 }
 
-/* ------------------------------------------------------------------ */
-/* Asignacion y liberacion de recursos                                */
-/* ------------------------------------------------------------------ */
-
-static int asignar_inodo(int es_directorio, uint32_t *salida)
-{
+static int asignar_inodo(int es_directorio, uint32_t *salida) {
     if (!ext4_escritura || !salida)
         return -1;
 
@@ -716,8 +627,7 @@ static int asignar_inodo(int es_directorio, uint32_t *salida)
                     break;
                 }
             }
-            uint32_t no_usados = hay ? (informacion.inodos_por_grupo - 1 - ultimo)
-                                     : informacion.inodos_por_grupo;
+            uint32_t no_usados = hay ? (informacion.inodos_por_grupo - 1 - ultimo) : informacion.inodos_por_grupo;
             escribir_u16(&desc[0x1C], (uint16_t)(no_usados & 0xFFFF));
             if (informacion.tamano_descriptor_grupo >= 64)
                 escribir_u16(&desc[0x32], (uint16_t)(no_usados >> 16));
@@ -755,8 +665,7 @@ static int asignar_inodo(int es_directorio, uint32_t *salida)
     return -1;
 }
 
-static int asignar_bloques(uint32_t cantidad, uint32_t *salida)
-{
+static int asignar_bloques(uint32_t cantidad, uint32_t *salida) {
     if (!ext4_escritura || !salida || cantidad == 0)
         return -1;
 
@@ -776,8 +685,7 @@ static int asignar_bloques(uint32_t cantidad, uint32_t *salida)
         uint32_t inicio = 0;
 
         for (uint32_t i = 0; i < bits; i++) {
-            uint64_t bloque = (uint64_t)informacion.primer_bloque_datos +
-                              (uint64_t)g * informacion.bloques_por_grupo + i;
+            uint64_t bloque = (uint64_t)informacion.primer_bloque_datos + (uint64_t)g * informacion.bloques_por_grupo + i;
             if (bloque >= informacion.total_bloques)
                 break;
 
@@ -802,8 +710,7 @@ static int asignar_bloques(uint32_t cantidad, uint32_t *salida)
                     if (superbloque_guardar() != 0)
                         return -1;
 
-                    *salida = informacion.primer_bloque_datos +
-                              g * informacion.bloques_por_grupo + inicio;
+                    *salida = informacion.primer_bloque_datos + g * informacion.bloques_por_grupo + inicio;
                     return 0;
                 }
             } else {
@@ -814,8 +721,7 @@ static int asignar_bloques(uint32_t cantidad, uint32_t *salida)
     return -1;
 }
 
-static int liberar_bloques_grupo(uint32_t grupo, uint32_t base, uint32_t desde, uint32_t cantidad)
-{
+static int liberar_bloques_grupo(uint32_t grupo, uint32_t base, uint32_t desde, uint32_t cantidad) {
     uint8_t desc[64];
     if (desc_leer(grupo, desc) != 0)
         return -1;
@@ -846,15 +752,13 @@ static int liberar_bloques_grupo(uint32_t grupo, uint32_t base, uint32_t desde, 
     return superbloque_guardar();
 }
 
-static int liberar_rango(uint32_t inicio, uint32_t cantidad)
-{
+static int liberar_rango(uint32_t inicio, uint32_t cantidad) {
     while (cantidad > 0) {
         if (inicio < informacion.primer_bloque_datos)
             return -1;
         uint32_t relativo = inicio - informacion.primer_bloque_datos;
         uint32_t grupo = relativo / informacion.bloques_por_grupo;
-        uint32_t base = informacion.primer_bloque_datos +
-                        grupo * informacion.bloques_por_grupo;
+        uint32_t base = informacion.primer_bloque_datos + grupo * informacion.bloques_por_grupo;
         uint32_t dentro = inicio - base;
         uint32_t restante_en_grupo = informacion.bloques_por_grupo - dentro;
         uint32_t lote = (cantidad < restante_en_grupo) ? cantidad : restante_en_grupo;
@@ -868,12 +772,7 @@ static int liberar_rango(uint32_t inicio, uint32_t cantidad)
     return 0;
 }
 
-/* ------------------------------------------------------------------ */
-/* Liberacion de bloques de un inodo                                  */
-/* ------------------------------------------------------------------ */
-
-static void liberar_indirecto(uint32_t bloque, int nivel)
-{
+static void liberar_indirecto(uint32_t bloque, int nivel) {
     if (bloque == 0)
         return;
     if (nivel <= 0)
@@ -899,10 +798,7 @@ static void liberar_indirecto(uint32_t bloque, int nivel)
 
 #define EXT4_EXT_MAX_NODOS 340
 
-/* Libera recursivamente un nodo de extents. El nodo raiz puede ser
- * i_block (nivel = profundidad); los nodos internos son bloques. */
-static int liberar_extents_nivel(uint8_t *nodo, int nivel)
-{
+static int liberar_extents_nivel(uint8_t *nodo, int nivel) {
     if (leer_u16(nodo) != EXT4_EXT_MAGIC)
         return -1;
     if ((int)nodo[6] != nivel)
@@ -950,8 +846,7 @@ static int liberar_extents_nivel(uint8_t *nodo, int nivel)
     return 0;
 }
 
-static int liberar_bloques_inodo(uint8_t *raw)
-{
+static int liberar_bloques_inodo(uint8_t *raw) {
     uint32_t flags = leer_u32(raw + 0x20);
     uint8_t *iblock = raw + 0x28;
 
@@ -990,8 +885,7 @@ static int liberar_bloques_inodo(uint8_t *raw)
     return 0;
 }
 
-static int liberar_inodo(uint32_t numero, int es_directorio)
-{
+static int liberar_inodo(uint32_t numero, int es_directorio) {
     uint32_t grupo, indice;
     uint8_t desc[64];
 
@@ -1016,8 +910,7 @@ static int liberar_inodo(uint32_t numero, int es_directorio)
             break;
         }
     }
-    uint32_t no_usados = hay ? (informacion.inodos_por_grupo - 1 - ultimo)
-                             : informacion.inodos_por_grupo;
+    uint32_t no_usados = hay ? (informacion.inodos_por_grupo - 1 - ultimo) : informacion.inodos_por_grupo;
     escribir_u16(&desc[0x1C], (uint16_t)(no_usados & 0xFFFF));
     if (informacion.tamano_descriptor_grupo >= 64)
         escribir_u16(&desc[0x32], (uint16_t)(no_usados >> 16));
@@ -1041,17 +934,11 @@ static int liberar_inodo(uint32_t numero, int es_directorio)
     return inodo_escribir_raw(numero, raw);
 }
 
-/* ------------------------------------------------------------------ */
-/* Directorios                                                        */
-/* ------------------------------------------------------------------ */
-
-static uint32_t alinear4(uint32_t v)
-{
+static uint32_t alinear4(uint32_t v) {
     return (v + 3u) & ~3u;
 }
 
-static int nombre_valido(const char *nombre)
-{
+static int nombre_valido(const char *nombre) {
     uint32_t n = longitud_nombre(nombre);
     if (n == 0 || n > EXT4_NAME_MAX)
         return 0;
@@ -1066,21 +953,13 @@ static int nombre_valido(const char *nombre)
     return 1;
 }
 
-static int dir_localizar(
-    uint32_t directorio,
-    const char *nombre,
-    ext4_dir_entry_t *salida,
-    uint32_t *bloque_fisico,
-    uint32_t *offset_entrada,
-    uint32_t *offset_anterior)
-{
+static int dir_localizar(uint32_t directorio, const char *nombre, ext4_dir_entry_t *salida, uint32_t *bloque_fisico, uint32_t *offset_entrada, uint32_t *offset_anterior) {
     uint8_t raw[256];
     if (inodo_leer_raw(directorio, raw) != 0)
         return -1;
 
     uint64_t tamano = inodo_tamano(raw);
-    uint32_t bloques = (uint32_t)(((uint32_t)tamano + informacion.tamano_bloque - 1) /
-                                  informacion.tamano_bloque);
+    uint32_t bloques = (uint32_t)(((uint32_t)tamano + informacion.tamano_bloque - 1) / informacion.tamano_bloque);
 
     for (uint32_t l = 0; l < bloques; l++) {
         uint32_t fisico = 0;
@@ -1099,8 +978,7 @@ static int dir_localizar(
                 uint8_t name_len = buffer_a[pos + 6];
                 uint8_t tipo = buffer_a[pos + 7];
 
-                if (rec_len < 8 || (rec_len & 3) != 0 ||
-                    pos + rec_len > informacion.tamano_bloque)
+                if (rec_len < 8 || (rec_len & 3) != 0 || pos + rec_len > informacion.tamano_bloque)
                     break;
                 if (name_len > (uint8_t)(rec_len - 8))
                     break;
@@ -1139,15 +1017,13 @@ static int dir_localizar(
     return -1;
 }
 
-int ext4_buscar_en(uint32_t directorio, const char *nombre, ext4_dir_entry_t *salida)
-{
+int ext4_buscar_en(uint32_t directorio, const char *nombre, ext4_dir_entry_t *salida) {
     if (!ext4_disponible || !nombre || !salida)
         return -1;
     return dir_localizar(directorio, nombre, salida, 0, 0, 0);
 }
 
-int ext4_listar_directorio(uint32_t numero_inodo, ext4_dir_entry_t *entradas, int max_entradas)
-{
+int ext4_listar_directorio(uint32_t numero_inodo, ext4_dir_entry_t *entradas, int max_entradas) {
     uint8_t raw[256];
 
     if (!ext4_disponible || !entradas || max_entradas <= 0)
@@ -1158,8 +1034,7 @@ int ext4_listar_directorio(uint32_t numero_inodo, ext4_dir_entry_t *entradas, in
         return -3;
 
     uint64_t tamano = inodo_tamano(raw);
-    uint32_t bloques = (uint32_t)(((uint32_t)tamano + informacion.tamano_bloque - 1) /
-                                  informacion.tamano_bloque);
+    uint32_t bloques = (uint32_t)(((uint32_t)tamano + informacion.tamano_bloque - 1) / informacion.tamano_bloque);
     int contador = 0;
 
     for (uint32_t l = 0; l < bloques && contador < max_entradas; l++) {
@@ -1169,7 +1044,6 @@ int ext4_listar_directorio(uint32_t numero_inodo, ext4_dir_entry_t *entradas, in
             if (leer_bloque(fisico, buffer_a) != 0)
                 continue;
         } else {
-            /* Hueco o bloque no inicializado: se trata como ceros. */
             llenar_ceros(buffer_a, informacion.tamano_bloque);
         }
 
@@ -1180,8 +1054,7 @@ int ext4_listar_directorio(uint32_t numero_inodo, ext4_dir_entry_t *entradas, in
             uint8_t name_len = buffer_a[pos + 6];
             uint8_t tipo = buffer_a[pos + 7];
 
-            if (rec_len < 8 || (rec_len & 3) != 0 ||
-                pos + rec_len > informacion.tamano_bloque)
+            if (rec_len < 8 || (rec_len & 3) != 0 || pos + rec_len > informacion.tamano_bloque)
                 break;
             if (name_len > (uint8_t)(rec_len - 8))
                 break;
@@ -1212,24 +1085,19 @@ int ext4_listar_directorio(uint32_t numero_inodo, ext4_dir_entry_t *entradas, in
     return contador;
 }
 
-/* Con metadata_csum cada bloque de directorio termina con una cola de 12
- * bytes (ext4_dir_entry_tail). El CRC cubre solo el area de entradas. */
-static uint32_t dir_limite_entradas(void)
-{
+static uint32_t dir_limite_entradas(void) {
     if (!ext4_metadata_csum)
         return informacion.tamano_bloque;
     return informacion.tamano_bloque - 12;
 }
 
-static uint32_t dir_semilla(uint32_t inodo)
-{
+static uint32_t dir_semilla(uint32_t inodo) {
     uint8_t numero[8];
     escribir_u64(numero, inodo);
     return crc32c(informacion.semilla_checksum, numero, 8);
 }
 
-static void dir_poner_cola(uint32_t inodo, uint8_t *bloque)
-{
+static void dir_poner_cola(uint32_t inodo, uint8_t *bloque) {
     uint32_t limite = informacion.tamano_bloque - 12;
 
     escribir_u32(bloque + limite, 0);
@@ -1237,23 +1105,19 @@ static void dir_poner_cola(uint32_t inodo, uint8_t *bloque)
     bloque[limite + 6] = 0;
     bloque[limite + 7] = 0xDE;
     escribir_u32(bloque + limite + 8, 0);
-    escribir_u32(bloque + limite + 8,
-                 crc32c(dir_semilla(inodo), bloque, limite));
+    escribir_u32(bloque + limite + 8, crc32c(dir_semilla(inodo), bloque, limite));
 }
 
-static void dir_actualizar_cola(uint32_t inodo, uint8_t *bloque)
-{
+static void dir_actualizar_cola(uint32_t inodo, uint8_t *bloque) {
     if (!ext4_metadata_csum)
         return;
 
     uint32_t limite = informacion.tamano_bloque - 12;
     escribir_u32(bloque + limite + 8, 0);
-    escribir_u32(bloque + limite + 8,
-                 crc32c(dir_semilla(inodo), bloque, limite));
+    escribir_u32(bloque + limite + 8, crc32c(dir_semilla(inodo), bloque, limite));
 }
 
-static int dir_agregar(uint32_t directorio, const char *nombre, uint32_t objetivo, uint8_t tipo)
-{
+static int dir_agregar(uint32_t directorio, const char *nombre, uint32_t objetivo, uint8_t tipo) {
     uint8_t raw[256];
     uint32_t n = longitud_nombre(nombre);
     uint32_t necesidad = 8 + alinear4(n);
@@ -1264,8 +1128,7 @@ static int dir_agregar(uint32_t directorio, const char *nombre, uint32_t objetiv
         return -1;
 
     uint64_t tamano = inodo_tamano(raw);
-    bloques = (uint32_t)(((uint32_t)tamano + informacion.tamano_bloque - 1) /
-                         informacion.tamano_bloque);
+    bloques = (uint32_t)(((uint32_t)tamano + informacion.tamano_bloque - 1) / informacion.tamano_bloque);
 
     for (uint32_t l = 0; l < bloques; l++) {
         uint32_t fisico = 0;
@@ -1280,8 +1143,7 @@ static int dir_agregar(uint32_t directorio, const char *nombre, uint32_t objetiv
             uint16_t rec_len = leer_u16(buffer_a + pos + 4);
             uint8_t name_len = buffer_a[pos + 6];
 
-            if (rec_len < 8 || (rec_len & 3) != 0 ||
-                pos + rec_len > limite)
+            if (rec_len < 8 || (rec_len & 3) != 0 || pos + rec_len > limite)
                 break;
 
             if (inodo == 0) {
@@ -1299,8 +1161,7 @@ static int dir_agregar(uint32_t directorio, const char *nombre, uint32_t objetiv
                 }
             } else {
                 uint32_t usado = 8 + alinear4(name_len);
-                if (rec_len >= usado + necesidad &&
-                    pos + usado + necesidad <= limite) {
+                if (rec_len >= usado + necesidad && pos + usado + necesidad <= limite) {
                     escribir_u16(buffer_a + pos + 4, (uint16_t)usado);
                     uint32_t nuevo = pos + usado;
                     uint16_t rec_nueva = (uint16_t)(rec_len - usado);
@@ -1320,7 +1181,6 @@ static int dir_agregar(uint32_t directorio, const char *nombre, uint32_t objetiv
         }
     }
 
-    /* No hay espacio en los bloques existentes: crear uno nuevo. */
     uint32_t nuevo_bloque = 0;
     if (asignar_bloques(1, &nuevo_bloque) != 0)
         return -2;
@@ -1347,8 +1207,7 @@ static int dir_agregar(uint32_t directorio, const char *nombre, uint32_t objetiv
 
     uint64_t nuevo_tamano = (uint64_t)(bloques + 1) * informacion.tamano_bloque;
     inodo_poner_tamano(raw, nuevo_tamano);
-    escribir_u32(raw + 0x1C, leer_u32(raw + 0x1C) +
-                  informacion.tamano_bloque / 512);
+    escribir_u32(raw + 0x1C, leer_u32(raw + 0x1C) + informacion.tamano_bloque / 512);
 
     if (inodo_escribir_raw(directorio, raw) != 0) {
         liberar_rango(nuevo_bloque, 1);
@@ -1357,23 +1216,17 @@ static int dir_agregar(uint32_t directorio, const char *nombre, uint32_t objetiv
     return 0;
 }
 
-static int dir_borrar_entrada(uint32_t directorio,
-                              uint32_t bloque_fisico,
-                              uint32_t offset_entrada,
-                              uint32_t offset_anterior)
-{
+static int dir_borrar_entrada(uint32_t directorio, uint32_t bloque_fisico, uint32_t offset_entrada, uint32_t offset_anterior) {
     if (leer_bloque(bloque_fisico, buffer_a) != 0)
         return -1;
 
     if (offset_anterior != 0xFFFFFFFFu) {
         uint16_t rec_ant = leer_u16(buffer_a + offset_anterior + 4);
         uint16_t rec_actual = leer_u16(buffer_a + offset_entrada + 4);
-        escribir_u16(buffer_a + offset_anterior + 4,
-                     (uint16_t)(rec_ant + rec_actual));
+        escribir_u16(buffer_a + offset_anterior + 4, (uint16_t)(rec_ant + rec_actual));
     } else {
         escribir_u32(buffer_a + offset_entrada, 0);
-        escribir_u16(buffer_a + offset_entrada + 4,
-                     leer_u16(buffer_a + offset_entrada + 4));
+        escribir_u16(buffer_a + offset_entrada + 4, leer_u16(buffer_a + offset_entrada + 4));
         buffer_a[offset_entrada + 6] = 0;
         buffer_a[offset_entrada + 7] = 0;
     }
@@ -1381,20 +1234,14 @@ static int dir_borrar_entrada(uint32_t directorio,
     return escribir_bloque(bloque_fisico, buffer_a);
 }
 
-/* ------------------------------------------------------------------ */
-/* Archivos                                                           */
-/* ------------------------------------------------------------------ */
-
-static int escribir_datos_bloque(uint32_t fisico, const char *datos, uint32_t cantidad)
-{
+static int escribir_datos_bloque(uint32_t fisico, const char *datos, uint32_t cantidad) {
     llenar_ceros(buffer_a, informacion.tamano_bloque);
     for (uint32_t i = 0; i < cantidad; i++)
         buffer_a[i] = (uint8_t)datos[i];
     return escribir_bloque(fisico, buffer_a);
 }
 
-int ext4_leer_archivo(uint32_t numero_inodo, char *buffer, uint32_t capacidad, uint32_t *leido)
-{
+int ext4_leer_archivo(uint32_t numero_inodo, char *buffer, uint32_t capacidad, uint32_t *leido) {
     uint8_t raw[256];
 
     if (!ext4_disponible || !buffer || capacidad == 0 || !leido)
@@ -1414,8 +1261,7 @@ int ext4_leer_archivo(uint32_t numero_inodo, char *buffer, uint32_t capacidad, u
     if (limite > (uint64_t)(capacidad - 1))
         limite = (uint64_t)(capacidad - 1);
 
-    uint32_t bloques = (uint32_t)(((uint32_t)limite + informacion.tamano_bloque - 1) /
-                                  informacion.tamano_bloque);
+    uint32_t bloques = (uint32_t)(((uint32_t)limite + informacion.tamano_bloque - 1) / informacion.tamano_bloque);
 
     for (uint32_t l = 0; l < bloques && *leido < limite; l++) {
         uint32_t fisico = 0;
@@ -1441,8 +1287,7 @@ int ext4_leer_archivo(uint32_t numero_inodo, char *buffer, uint32_t capacidad, u
     return 0;
 }
 
-static void inodo_vaciar(uint8_t *raw)
-{
+static void inodo_vaciar(uint8_t *raw) {
     uint32_t flags = leer_u32(raw + 0x20);
     inodo_poner_tamano(raw, 0);
     escribir_u32(raw + 0x1C, 0);
@@ -1450,8 +1295,7 @@ static void inodo_vaciar(uint8_t *raw)
     escribir_u32(raw + 0x20, flags);
 }
 
-int ext4_escribir_archivo(uint32_t numero_inodo, const char *datos, uint32_t longitud)
-{
+int ext4_escribir_archivo(uint32_t numero_inodo, const char *datos, uint32_t longitud) {
     uint8_t raw[256];
 
     if (!ext4_disponible || !ext4_escritura || !datos)
@@ -1466,15 +1310,13 @@ int ext4_escribir_archivo(uint32_t numero_inodo, const char *datos, uint32_t lon
     inodo_vaciar(raw);
     inodo_iniciar_extents(raw);
 
-    /* Dejar el inodo vacio y consistente antes de tocar datos. */
     if (inodo_escribir_raw(numero_inodo, raw) != 0)
         return -5;
 
     if (longitud == 0)
         return 0;
 
-    uint32_t total_bloques =
-        (longitud + informacion.tamano_bloque - 1) / informacion.tamano_bloque;
+    uint32_t total_bloques = (longitud + informacion.tamano_bloque - 1) / informacion.tamano_bloque;
     uint32_t logico = 0;
 
     while (logico < total_bloques) {
@@ -1524,25 +1366,18 @@ int ext4_escribir_archivo(uint32_t numero_inodo, const char *datos, uint32_t lon
     }
 
     inodo_poner_tamano(raw, (uint64_t)longitud);
-    escribir_u32(raw + 0x1C,
-                 total_bloques * (informacion.tamano_bloque / 512));
+    escribir_u32(raw + 0x1C, total_bloques * (informacion.tamano_bloque / 512));
     return inodo_escribir_raw(numero_inodo, raw);
 }
 
-/* ------------------------------------------------------------------ */
-/* Creacion y eliminacion                                             */
-/* ------------------------------------------------------------------ */
-
-int ext4_inodo_es_directorio(uint32_t numero_inodo)
-{
+int ext4_inodo_es_directorio(uint32_t numero_inodo) {
     uint8_t raw[256];
     if (inodo_leer_raw(numero_inodo, raw) != 0)
         return 0;
     return (leer_u16(raw) & EXT4_S_IFMT) == EXT4_S_IFDIR;
 }
 
-int ext4_directorio_vacio(uint32_t numero_inodo)
-{
+int ext4_directorio_vacio(uint32_t numero_inodo) {
     uint8_t raw[256];
 
     if (inodo_leer_raw(numero_inodo, raw) != 0)
@@ -1551,8 +1386,7 @@ int ext4_directorio_vacio(uint32_t numero_inodo)
         return -1;
 
     uint64_t tamano = inodo_tamano(raw);
-    uint32_t bloques = (uint32_t)(((uint32_t)tamano + informacion.tamano_bloque - 1) /
-                                  informacion.tamano_bloque);
+    uint32_t bloques = (uint32_t)(((uint32_t)tamano + informacion.tamano_bloque - 1) / informacion.tamano_bloque);
 
     for (uint32_t l = 0; l < bloques; l++) {
         uint32_t fisico = 0;
@@ -1568,16 +1402,14 @@ int ext4_directorio_vacio(uint32_t numero_inodo)
             uint16_t rec_len = leer_u16(buffer_a + pos + 4);
             uint8_t name_len = buffer_a[pos + 6];
 
-            if (rec_len < 8 || (rec_len & 3) != 0 ||
-                pos + rec_len > informacion.tamano_bloque)
+            if (rec_len < 8 || (rec_len & 3) != 0 || pos + rec_len > informacion.tamano_bloque)
                 break;
             if (name_len > (uint8_t)(rec_len - 8))
                 break;
 
             if (inodo != 0 && name_len > 0) {
                 int es_punto = (name_len == 1 && buffer_a[pos + 8] == '.');
-                int es_padre = (name_len == 2 && buffer_a[pos + 8] == '.' &&
-                                buffer_a[pos + 9] == '.');
+                int es_padre = (name_len == 2 && buffer_a[pos + 8] == '.' && buffer_a[pos + 9] == '.');
                 if (!es_punto && !es_padre)
                     return 0;
             }
@@ -1587,8 +1419,7 @@ int ext4_directorio_vacio(uint32_t numero_inodo)
     return 1;
 }
 
-int ext4_crear(uint32_t directorio, const char *nombre, int es_directorio, uint32_t *nuevo_inodo)
-{
+int ext4_crear(uint32_t directorio, const char *nombre, int es_directorio, uint32_t *nuevo_inodo) {
     uint8_t raw_padre[256];
     uint8_t raw[256];
     uint32_t inodo_nuevo = 0;
@@ -1691,8 +1522,7 @@ int ext4_crear(uint32_t directorio, const char *nombre, int es_directorio, uint3
     return 0;
 }
 
-int ext4_eliminar(uint32_t directorio, const char *nombre)
-{
+int ext4_eliminar(uint32_t directorio, const char *nombre) {
     ext4_dir_entry_t entrada;
     uint32_t bloque = 0;
     uint32_t offset = 0;
@@ -1746,8 +1576,7 @@ int ext4_eliminar(uint32_t directorio, const char *nombre)
     return liberar_inodo(entrada.inodo, es_dir);
 }
 
-int ext4_eliminar_recursivo(uint32_t directorio, const char *nombre)
-{
+int ext4_eliminar_recursivo(uint32_t directorio, const char *nombre) {
     ext4_dir_entry_t entrada;
 
     if (ext4_buscar_en(directorio, nombre, &entrada) != 0)
@@ -1764,8 +1593,7 @@ int ext4_eliminar_recursivo(uint32_t directorio, const char *nombre)
             for (int i = 0; i < cantidad; i++) {
                 if (hijos[i].name_len == 1 && hijos[i].nombre[0] == '.')
                     continue;
-                if (hijos[i].name_len == 2 && hijos[i].nombre[0] == '.' &&
-                    hijos[i].nombre[1] == '.')
+                if (hijos[i].name_len == 2 && hijos[i].nombre[0] == '.' && hijos[i].nombre[1] == '.')
                     continue;
                 siguiente = i;
                 break;
@@ -1787,32 +1615,23 @@ int ext4_eliminar_recursivo(uint32_t directorio, const char *nombre)
     return ext4_eliminar(directorio, nombre);
 }
 
-/* ------------------------------------------------------------------ */
-/* API de compatibilidad                                              */
-/* ------------------------------------------------------------------ */
-
-int ext4_crear_archivo(const char *nombre)
-{
+int ext4_crear_archivo(const char *nombre) {
     return ext4_crear(EXT4_ROOT_INO, nombre, 0, 0);
 }
 
-int ext4_crear_directorio(const char *nombre)
-{
+int ext4_crear_directorio(const char *nombre) {
     return ext4_crear(EXT4_ROOT_INO, nombre, 1, 0);
 }
 
-int ext4_eliminar_archivo(const char *nombre)
-{
+int ext4_eliminar_archivo(const char *nombre) {
     return ext4_eliminar(EXT4_ROOT_INO, nombre);
 }
 
-int ext4_eliminar_directorio(const char *nombre)
-{
+int ext4_eliminar_directorio(const char *nombre) {
     return ext4_eliminar(EXT4_ROOT_INO, nombre);
 }
 
-int ext4_buscar_nombre(const char *nombre, uint32_t *inodo_out)
-{
+int ext4_buscar_nombre(const char *nombre, uint32_t *inodo_out) {
     ext4_dir_entry_t entrada;
     if (!inodo_out)
         return -1;
@@ -1822,12 +1641,7 @@ int ext4_buscar_nombre(const char *nombre, uint32_t *inodo_out)
     return 0;
 }
 
-/* ------------------------------------------------------------------ */
-/* Montaje y lectura de inodos publica                                 */
-/* ------------------------------------------------------------------ */
-
-int ext4_montar(ext4_read_bytes_fn leer, uint64_t inicio_particion)
-{
+int ext4_montar(ext4_read_bytes_fn leer, uint64_t inicio_particion) {
     if (!leer)
         return -1;
 
@@ -1862,27 +1676,21 @@ int ext4_montar(ext4_read_bytes_fn leer, uint64_t inicio_particion)
 
     informacion.total_bloques = (uint64_t)informacion.bloques_bajos;
     if (informacion.caracteristicas_incompatibles & EXT4_FEATURE_INCOMPAT_64BIT)
-        informacion.total_bloques |=
-            ((uint64_t)leer_u32(&superbloque[0x150]) << 32);
+        informacion.total_bloques |= ((uint64_t)leer_u32(&superbloque[0x150]) << 32);
 
     if (informacion.caracteristicas_incompatibles & EXT4_FEATURE_INCOMPAT_64BIT) {
         informacion.tamano_descriptor_grupo = leer_u16(&superbloque[0xFE]);
-        if (informacion.tamano_descriptor_grupo < 32 ||
-            informacion.tamano_descriptor_grupo > 64)
+        if (informacion.tamano_descriptor_grupo < 32 || informacion.tamano_descriptor_grupo > 64)
             informacion.tamano_descriptor_grupo = 64;
     } else {
         informacion.tamano_descriptor_grupo = 32;
     }
 
-    if (informacion.tamano_bloque < 1024 ||
-        informacion.tamano_bloque > EXT4_BLOCK_MAX ||
-        (informacion.tamano_bloque & (informacion.tamano_bloque - 1)) != 0)
+    if (informacion.tamano_bloque < 1024 || informacion.tamano_bloque > EXT4_BLOCK_MAX || (informacion.tamano_bloque & (informacion.tamano_bloque - 1)) != 0)
         return -5;
-    if (informacion.tamano_inodo < EXT4_GOOD_OLD_INODE_SIZE ||
-        informacion.tamano_inodo > 256)
+    if (informacion.tamano_inodo < EXT4_GOOD_OLD_INODE_SIZE || informacion.tamano_inodo > 256)
         return -5;
-    if (informacion.inodos_por_grupo == 0 ||
-        informacion.bloques_por_grupo == 0)
+    if (informacion.inodos_por_grupo == 0 || informacion.bloques_por_grupo == 0)
         return -5;
     if (informacion.total_bloques > 0xFFFFFFFFu)
         return -5;
@@ -1898,17 +1706,13 @@ int ext4_montar(ext4_read_bytes_fn leer, uint64_t inicio_particion)
     for (int i = 0; i < 16; i++)
         informacion.uuid[i] = superbloque[0x68 + i];
 
-    ext4_metadata_csum =
-        (informacion.caracteristicas_solo_lectura &
-         EXT4_FEATURE_RO_COMPAT_METADATA_CSUM) ? 1 : 0;
+    ext4_metadata_csum = (informacion.caracteristicas_solo_lectura & EXT4_FEATURE_RO_COMPAT_METADATA_CSUM) ? 1 : 0;
 
     if (ext4_metadata_csum) {
-        if (informacion.caracteristicas_incompatibles &
-            EXT4_FEATURE_INCOMPAT_CSUM_SEED) {
+        if (informacion.caracteristicas_incompatibles & EXT4_FEATURE_INCOMPAT_CSUM_SEED) {
             informacion.semilla_checksum = leer_u32(&superbloque[0x270]);
         } else {
-            informacion.semilla_checksum =
-                crc32c(0xFFFFFFFFu, informacion.uuid, 16);
+            informacion.semilla_checksum = crc32c(0xFFFFFFFFu, informacion.uuid, 16);
         }
     } else {
         informacion.semilla_checksum = 0;
@@ -1917,38 +1721,30 @@ int ext4_montar(ext4_read_bytes_fn leer, uint64_t inicio_particion)
     if (informacion.total_bloques <= informacion.primer_bloque_datos)
         return -7;
 
-    uint32_t grupos = ((uint32_t)informacion.total_bloques -
-                       informacion.primer_bloque_datos +
-                       informacion.bloques_por_grupo - 1) /
-                      informacion.bloques_por_grupo;
+    uint32_t grupos = ((uint32_t)informacion.total_bloques - informacion.primer_bloque_datos + informacion.bloques_por_grupo - 1) / informacion.bloques_por_grupo;
     if (grupos == 0)
         return -7;
     informacion.total_grupos = grupos;
 
-    informacion.offset_tabla_descriptores =
-        (uint64_t)(informacion.primer_bloque_datos + 1) *
-        (uint64_t)informacion.tamano_bloque;
+    informacion.offset_tabla_descriptores = (uint64_t)(informacion.primer_bloque_datos + 1) * (uint64_t)informacion.tamano_bloque;
 
     ext4_disponible = 1;
     ext4_escritura = 0;
     return 0;
 }
 
-void ext4_set_escribir(ext4_write_bytes_fn escribir)
-{
+void ext4_set_escribir(ext4_write_bytes_fn escribir) {
     ext4_escribir_disco = escribir;
     ext4_escritura = (escribir != 0);
 }
 
-const ext4_info_t *ext4_obtener_info(void)
-{
+const ext4_info_t *ext4_obtener_info(void) {
     if (!ext4_disponible)
         return 0;
     return &informacion;
 }
 
-int ext4_leer_inodo(uint32_t numero_inodo, ext4_inodo_t *inodo)
-{
+int ext4_leer_inodo(uint32_t numero_inodo, ext4_inodo_t *inodo) {
     uint8_t raw[256];
 
     if (!ext4_disponible || !inodo)
