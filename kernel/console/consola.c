@@ -29,6 +29,17 @@ void print(const char *text){
         i++;
     }
 }
+static void desplazar_pantalla(void) {
+    while (posicion >= 80 * 25) {
+        for (int i = 0; i < 80 * 24; i++) {
+            video[i] = video[i + 80];
+        }
+        for (int i = 80 * 24; i < 80 * 25; i++) {
+            video[i] = ((uint16_t)0x0F << 8) | ' ';
+        }
+        posicion -= 80;
+    }
+}
 void imprimir(char *text, char *color, int salto) {
 
     uint8_t atributo = 0x0F;
@@ -60,7 +71,7 @@ void imprimir(char *text, char *color, int salto) {
             posicion++;
         }
         if(posicion >= 80*25) {
-            posicion = 0;
+            desplazar_pantalla();
         }
         text++;
     }
@@ -68,7 +79,7 @@ void imprimir(char *text, char *color, int salto) {
         posicion = ((posicion / 80) + 1) * 80;
     }
     if(posicion >= 80*25) {
-        posicion = 0;
+        desplazar_pantalla();
     }
     actualizar_cursor();
 }

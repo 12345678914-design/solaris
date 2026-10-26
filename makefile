@@ -5,7 +5,7 @@ LD = ld
 
 CFLAGS = -m32 -ffreestanding -fno-pie -fno-stack-protector \
          -Wall -Wextra -Ikernel -Ikernel/fs \
-         -Ikernel/driver -Ikernel/driver/PCI -Ikernel/console -Ikernel/shell
+         -Ikernel/driver -Ikernel/driver/PCI -Ikernel/driver/IDE -Ikernel/console -Ikernel/shell
 
 LDFLAGS = -m elf_i386
 
@@ -16,8 +16,10 @@ OBJS = boot.o \
        shell.o \
        ramfs.o \
        power.o \
-	   ext4.o \
-	   ide.o
+       ext4.o \
+       ide.o \
+       vfs.o
+
 
 all: os.iso
 
@@ -39,12 +41,16 @@ shell.o: kernel/shell/shell.c
 ramfs.o: kernel/fs/ramfs.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+vfs.o: kernel/fs/vfs.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
 power.o: kernel/driver/PCI/power.c
 	$(CC) $(CFLAGS) -c $< -o $@
 ext4.o: kernel/fs/ext4.c
 	$(CC) $(CFLAGS) -c $< -o $@
 ide.o: kernel/driver/IDE/ide.c
 	$(CC) $(CFLAGS) -c $< -o $@
+
 
 kernel.bin: $(OBJS)
 	$(LD) $(LDFLAGS) -T kernel/linker.ld -o $@ $(OBJS)

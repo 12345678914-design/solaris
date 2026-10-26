@@ -10,4 +10,11 @@ int ide_leer_bytes(
     uint32_t size
 );
 
+int ide_escribir_bytes(
+    uint64_t offset,
+    const void *buffer,
+    uint32_t size
+);
+
 #endif
+
